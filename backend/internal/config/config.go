@@ -1592,7 +1592,7 @@ func setDefaults() {
 	viper.SetDefault("default.admin_password", "")
 	viper.SetDefault("default.user_concurrency", 5)
 	viper.SetDefault("default.user_balance", 0)
-	viper.SetDefault("default.api_key_prefix", "sk-")
+	viper.SetDefault("default.api_key_prefix", "zc-")
 	viper.SetDefault("default.rate_multiplier", 1.0)
 
 	// RateLimit

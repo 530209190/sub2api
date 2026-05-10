@@ -256,7 +256,7 @@ func (s *APIKeyService) GenerateKey() (string, error) {
 	// 转换为十六进制字符串并添加前缀
 	prefix := s.cfg.Default.APIKeyPrefix
 	if prefix == "" {
-		prefix = "sk-"
+		prefix = "zc-"
 	}
 
 	key := prefix + hex.EncodeToString(bytes)

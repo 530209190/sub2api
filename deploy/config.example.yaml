@@ -941,7 +941,7 @@ default:
   # API 密钥设置
   # Prefix for generated API keys
   # 生成的 API 密钥前缀
-  api_key_prefix: "sk-"
+  api_key_prefix: "zc-"
 
   # Rate multiplier (affects billing calculation)
   # 费率倍数（影响计费计算）

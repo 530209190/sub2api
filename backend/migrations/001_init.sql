@@ -87,7 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_accounts_deleted_at ON accounts(deleted_at);
 CREATE TABLE IF NOT EXISTS api_keys (
     id              BIGSERIAL PRIMARY KEY,
     user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    key             VARCHAR(64) NOT NULL UNIQUE,          -- sk-xxx格式
+    key             VARCHAR(64) NOT NULL UNIQUE,          -- zc-xxx格式
     name            VARCHAR(100) NOT NULL,
     group_id        BIGINT REFERENCES groups(id) ON DELETE SET NULL,
     status          VARCHAR(20) NOT NULL DEFAULT 'active', -- active/disabled

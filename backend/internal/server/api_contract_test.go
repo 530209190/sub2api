@@ -1169,7 +1169,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 
 	cfg := &config.Config{
 		Default: config.DefaultConfig{
-			APIKeyPrefix: "sk-",
+			APIKeyPrefix: "zc-",
 		},
 		RunMode: config.RunModeStandard,
 	}

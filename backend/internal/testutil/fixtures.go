@@ -50,7 +50,7 @@ func NewTestAPIKey(opts ...func(*service.APIKey)) *service.APIKey {
 	k := &service.APIKey{
 		ID:        1,
 		UserID:    1,
-		Key:       "sk-test-key-12345678",
+		Key:       "zc-test-key-12345678",
 		Name:      "test-key",
 		GroupID:   &groupID,
 		Status:    service.StatusActive,
