@@ -947,6 +947,12 @@ default:
   # 费率倍数（影响计费计算）
   rate_multiplier: 1.0
 
+  # Global user billing multiplier, multiplied after user/group rate multiplier.
+  # 全局用户计费倍率，会在用户专属/分组倍率之后相乘。
+  # Example: group rate 1.2 and this value 0.8 => final user billing multiplier 0.96.
+  # 示例：分组倍率 1.2，此处 0.8，则最终用户计费倍率为 0.96。
+  user_billing_multiplier: 1.0
+
 # =============================================================================
 # Rate Limiting
 # 速率限制

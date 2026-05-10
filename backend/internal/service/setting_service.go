@@ -115,6 +115,8 @@ type SettingService struct {
 	onUpdate                func() // Callback when settings are updated (for cache invalidation)
 	version                 string // Application version
 	webSearchManagerBuilder WebSearchManagerBuilder
+	userBillingMultiplierCache atomic.Value // *cachedUserBillingMultiplierSettings
+	userBillingMultiplierSF    singleflight.Group
 }
 
 type ProviderDefaultGrantSettings struct {
@@ -134,6 +136,18 @@ type AuthSourceDefaultSettings struct {
 	Google                       ProviderDefaultGrantSettings
 	ForceEmailOnThirdPartySignup bool
 }
+
+type UserBillingMultiplierSettings struct {
+	Enabled    bool    `json:"enabled"`
+	Multiplier float64 `json:"multiplier"`
+}
+
+type cachedUserBillingMultiplierSettings struct {
+	settings  UserBillingMultiplierSettings
+	expiresAt int64 // unix nano
+}
+
+const userBillingMultiplierSettingsCacheTTL = 30 * time.Second
 
 type authSourceDefaultKeySet struct {
 	balance          string
@@ -539,6 +553,13 @@ func (s *SettingService) SetDefaultSubscriptionGroupReader(reader DefaultSubscri
 // SetProxyRepository injects a proxy repo for resolving websearch provider proxy URLs.
 func (s *SettingService) SetProxyRepository(repo ProxyRepository) {
 	s.proxyRepo = repo
+}
+
+func (s *SettingService) defaultUserBillingMultiplier() float64 {
+	if s != nil {
+		return defaultUserBillingMultiplierFromConfig(s.cfg)
+	}
+	return 1
 }
 
 // GetAllSettings 获取所有系统设置
@@ -2345,6 +2366,12 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		// Available channels feature (default disabled; opt-in)
 		SettingKeyAvailableChannelsEnabled: "false",
 
+		// Global user billing multiplier (enabled by default; config file provides the initial factor)
+		SettingKeyUserBillingMultiplierSettings: userBillingMultiplierSettingsToJSON(UserBillingMultiplierSettings{
+			Enabled:    true,
+			Multiplier: s.defaultUserBillingMultiplier(),
+		}),
+
 		// Affiliate (邀请返利) feature (default disabled; opt-in)
 		SettingKeyAffiliateEnabled: "false",
 
@@ -2789,6 +2816,31 @@ func isFalseSettingValue(value string) bool {
 	}
 }
 
+func userBillingMultiplierSettingsToJSON(settings UserBillingMultiplierSettings) string {
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return `{"enabled":true,"multiplier":1}`
+	}
+	return string(data)
+}
+
+func parseUserBillingMultiplierSettingsJSON(value string, fallback UserBillingMultiplierSettings) UserBillingMultiplierSettings {
+	var raw struct {
+		Enabled    *bool    `json:"enabled"`
+		Multiplier *float64 `json:"multiplier"`
+	}
+	if err := json.Unmarshal([]byte(value), &raw); err != nil {
+		return fallback
+	}
+	if raw.Enabled != nil {
+		fallback.Enabled = *raw.Enabled
+	}
+	if raw.Multiplier != nil {
+		fallback.Multiplier = normalizeUserBillingMultiplierValue(*raw.Multiplier, fallback.Multiplier)
+	}
+	return fallback
+}
+
 func normalizeVisibleMethodSettingSource(method, source string, enabled bool) (string, error) {
 	_ = enabled
 	source = strings.TrimSpace(source)
@@ -3201,6 +3253,99 @@ func (s *SettingService) GetWeChatConnectOAuthConfig(ctx context.Context) (WeCha
 		return WeChatConnectOAuthConfig{}, fmt.Errorf("get wechat connect settings: %w", err)
 	}
 	return s.parseWeChatConnectOAuthConfig(settings)
+}
+
+// GetUserBillingMultiplierSettings 获取全局用户计费倍率配置。
+func (s *SettingService) GetUserBillingMultiplierSettings(ctx context.Context) (*UserBillingMultiplierSettings, error) {
+	settings := DefaultUserBillingMultiplierSettings(nil)
+	if s != nil {
+		settings.Multiplier = s.defaultUserBillingMultiplier()
+	}
+	if s == nil || s.settingRepo == nil {
+		return settings, nil
+	}
+
+	if cached, ok := s.userBillingMultiplierCache.Load().(*cachedUserBillingMultiplierSettings); ok {
+		if time.Now().UnixNano() < cached.expiresAt {
+			out := cached.settings
+			return &out, nil
+		}
+	}
+
+	result, err, _ := s.userBillingMultiplierSF.Do(SettingKeyUserBillingMultiplierSettings, func() (any, error) {
+		if cached, ok := s.userBillingMultiplierCache.Load().(*cachedUserBillingMultiplierSettings); ok {
+			if time.Now().UnixNano() < cached.expiresAt {
+				return cached.settings, nil
+			}
+		}
+
+		value, err := s.settingRepo.GetValue(ctx, SettingKeyUserBillingMultiplierSettings)
+		if err != nil {
+			if errors.Is(err, ErrSettingNotFound) {
+				s.userBillingMultiplierCache.Store(&cachedUserBillingMultiplierSettings{
+					settings:  *settings,
+					expiresAt: time.Now().Add(userBillingMultiplierSettingsCacheTTL).UnixNano(),
+				})
+				return *settings, nil
+			}
+			return UserBillingMultiplierSettings{}, fmt.Errorf("get user billing multiplier settings: %w", err)
+		}
+		if strings.TrimSpace(value) == "" {
+			s.userBillingMultiplierCache.Store(&cachedUserBillingMultiplierSettings{
+				settings:  *settings,
+				expiresAt: time.Now().Add(userBillingMultiplierSettingsCacheTTL).UnixNano(),
+			})
+			return *settings, nil
+		}
+
+		resolved := parseUserBillingMultiplierSettingsJSON(value, *settings)
+		s.userBillingMultiplierCache.Store(&cachedUserBillingMultiplierSettings{
+			settings:  resolved,
+			expiresAt: time.Now().Add(userBillingMultiplierSettingsCacheTTL).UnixNano(),
+		})
+		return resolved, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resolved, ok := result.(UserBillingMultiplierSettings)
+	if !ok {
+		return settings, nil
+	}
+	return &resolved, nil
+}
+
+// SetUserBillingMultiplierSettings 设置全局用户计费倍率配置。
+func (s *SettingService) SetUserBillingMultiplierSettings(ctx context.Context, settings *UserBillingMultiplierSettings) error {
+	if s == nil || s.settingRepo == nil {
+		return fmt.Errorf("setting repository is not configured")
+	}
+	if settings == nil {
+		return fmt.Errorf("settings cannot be nil")
+	}
+	if math.IsNaN(settings.Multiplier) || math.IsInf(settings.Multiplier, 0) || settings.Multiplier < 0 {
+		return fmt.Errorf("multiplier must be greater than or equal to 0")
+	}
+
+	normalized := UserBillingMultiplierSettings{
+		Enabled:    settings.Enabled,
+		Multiplier: settings.Multiplier,
+	}
+	data, err := json.Marshal(normalized)
+	if err != nil {
+		return fmt.Errorf("marshal user billing multiplier settings: %w", err)
+	}
+
+	if err := s.settingRepo.Set(ctx, SettingKeyUserBillingMultiplierSettings, string(data)); err != nil {
+		return err
+	}
+	s.userBillingMultiplierSF.Forget(SettingKeyUserBillingMultiplierSettings)
+	s.userBillingMultiplierCache.Store(&cachedUserBillingMultiplierSettings{
+		settings:  normalized,
+		expiresAt: time.Now().Add(userBillingMultiplierSettingsCacheTTL).UnixNano(),
+	})
+	return nil
 }
 
 // GetOverloadCooldownSettings 获取529过载冷却配置

@@ -2619,6 +2619,64 @@ func (h *SettingHandler) DeleteAdminAPIKey(c *gin.Context) {
 	response.Success(c, gin.H{"message": "Admin API key deleted"})
 }
 
+type UserBillingMultiplierSettingsResponse struct {
+	Enabled    bool    `json:"enabled"`
+	Multiplier float64 `json:"multiplier"`
+}
+
+type UpdateUserBillingMultiplierSettingsRequest struct {
+	Enabled    bool    `json:"enabled"`
+	Multiplier float64 `json:"multiplier"`
+}
+
+// GetUserBillingMultiplierSettings 获取全局用户计费倍率配置
+// GET /api/v1/admin/settings/user-billing-multiplier
+func (h *SettingHandler) GetUserBillingMultiplierSettings(c *gin.Context) {
+	settings, err := h.settingService.GetUserBillingMultiplierSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, UserBillingMultiplierSettingsResponse{
+		Enabled:    settings.Enabled,
+		Multiplier: settings.Multiplier,
+	})
+}
+
+// UpdateUserBillingMultiplierSettings 更新全局用户计费倍率配置
+// PUT /api/v1/admin/settings/user-billing-multiplier
+func (h *SettingHandler) UpdateUserBillingMultiplierSettings(c *gin.Context) {
+	var req UpdateUserBillingMultiplierSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if req.Multiplier < 0 {
+		response.BadRequest(c, "multiplier must be greater than or equal to 0")
+		return
+	}
+
+	settings := &service.UserBillingMultiplierSettings{
+		Enabled:    req.Enabled,
+		Multiplier: req.Multiplier,
+	}
+	if err := h.settingService.SetUserBillingMultiplierSettings(c.Request.Context(), settings); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	updated, err := h.settingService.GetUserBillingMultiplierSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, UserBillingMultiplierSettingsResponse{
+		Enabled:    updated.Enabled,
+		Multiplier: updated.Multiplier,
+	})
+}
+
 // GetOverloadCooldownSettings 获取529过载冷却配置
 // GET /api/v1/admin/settings/overload-cooldown
 func (h *SettingHandler) GetOverloadCooldownSettings(c *gin.Context) {

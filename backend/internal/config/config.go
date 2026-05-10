@@ -1126,12 +1126,13 @@ type TurnstileConfig struct {
 }
 
 type DefaultConfig struct {
-	AdminEmail      string  `mapstructure:"admin_email"`
-	AdminPassword   string  `mapstructure:"admin_password"`
-	UserConcurrency int     `mapstructure:"user_concurrency"`
-	UserBalance     float64 `mapstructure:"user_balance"`
-	APIKeyPrefix    string  `mapstructure:"api_key_prefix"`
-	RateMultiplier  float64 `mapstructure:"rate_multiplier"`
+	AdminEmail            string   `mapstructure:"admin_email"`
+	AdminPassword         string   `mapstructure:"admin_password"`
+	UserConcurrency       int      `mapstructure:"user_concurrency"`
+	UserBalance           float64  `mapstructure:"user_balance"`
+	APIKeyPrefix          string   `mapstructure:"api_key_prefix"`
+	RateMultiplier        float64  `mapstructure:"rate_multiplier"`
+	UserBillingMultiplier *float64 `mapstructure:"user_billing_multiplier"`
 }
 
 type RateLimitConfig struct {

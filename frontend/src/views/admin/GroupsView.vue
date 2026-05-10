@@ -61,6 +61,14 @@
               />
             </button>
             <button
+              @click="openUserBillingSettingsModal"
+              class="btn btn-secondary"
+              :title="t('admin.groups.userBillingSettings.title')"
+            >
+              <Icon name="cog" size="md" class="mr-2" />
+              {{ t("admin.groups.userBillingSettings.button") }}
+            </button>
+            <button
               @click="openSortModal"
               class="btn btn-secondary"
               :title="t('admin.groups.sortOrder')"
@@ -2815,6 +2823,134 @@
       </template>
     </BaseDialog>
 
+    <!-- Global User Billing Multiplier Modal -->
+    <BaseDialog
+      :show="showUserBillingSettingsModal"
+      :title="t('admin.groups.userBillingSettings.title')"
+      width="normal"
+      @close="closeUserBillingSettingsModal"
+    >
+      <div class="space-y-5">
+        <div
+          v-if="userBillingSettingsLoading"
+          class="flex items-center justify-center py-8 text-sm text-gray-500 dark:text-gray-400"
+        >
+          <svg
+            class="mr-2 h-4 w-4 animate-spin"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            ></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          {{ t("common.loading") }}
+        </div>
+
+        <template v-else>
+          <label
+            class="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+          >
+            <div>
+              <div class="font-medium text-gray-900 dark:text-white">
+                {{ t("admin.groups.userBillingSettings.enabled") }}
+              </div>
+              <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.groups.userBillingSettings.enabledHint") }}
+              </div>
+            </div>
+            <input
+              v-model="userBillingSettingsForm.enabled"
+              type="checkbox"
+              class="mt-1 h-5 w-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500 dark:bg-dark-700"
+            />
+          </label>
+
+          <div>
+            <label class="label">
+              {{ t("admin.groups.userBillingSettings.multiplier") }}
+            </label>
+            <input
+              v-model.number="userBillingSettingsForm.multiplier"
+              type="number"
+              min="0"
+              step="0.001"
+              class="input"
+              :disabled="!userBillingSettingsForm.enabled"
+            />
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t("admin.groups.userBillingSettings.multiplierHint") }}
+            </p>
+          </div>
+
+          <div class="rounded-lg bg-gray-50 p-4 text-sm dark:bg-dark-700">
+            <span class="text-gray-500 dark:text-gray-400">
+              {{
+                userBillingSettingsForm.enabled
+                  ? t("admin.groups.userBillingSettings.effectivePreview")
+                  : t("admin.groups.userBillingSettings.disabledPreview")
+              }}
+            </span>
+            <span
+              v-if="userBillingSettingsForm.enabled"
+              class="ml-2 font-medium text-gray-900 dark:text-white"
+            >
+              {{ normalizedUserBillingMultiplier }}x
+            </span>
+          </div>
+        </template>
+      </div>
+
+      <template #footer>
+        <div class="flex justify-end gap-3 pt-4">
+          <button
+            @click="closeUserBillingSettingsModal"
+            type="button"
+            class="btn btn-secondary"
+          >
+            {{ t("common.cancel") }}
+          </button>
+          <button
+            @click="saveUserBillingSettings"
+            :disabled="userBillingSettingsSubmitting || userBillingSettingsLoading"
+            class="btn btn-primary"
+          >
+            <svg
+              v-if="userBillingSettingsSubmitting"
+              class="-ml-1 mr-2 h-4 w-4 animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            {{ userBillingSettingsSubmitting ? t("common.saving") : t("common.save") }}
+          </button>
+        </div>
+      </template>
+    </BaseDialog>
+
     <!-- Group Rate Multipliers Modal -->
     <GroupRateMultipliersModal
       :show="showRateMultipliersModal"
@@ -3087,8 +3223,11 @@ const showCreateModal = ref(false);
 const showEditModal = ref(false);
 const showDeleteDialog = ref(false);
 const showSortModal = ref(false);
+const showUserBillingSettingsModal = ref(false);
 const submitting = ref(false);
 const sortSubmitting = ref(false);
+const userBillingSettingsLoading = ref(false);
+const userBillingSettingsSubmitting = ref(false);
 const editingGroup = ref<AdminGroup | null>(null);
 const deletingGroup = ref<AdminGroup | null>(null);
 const showRateMultipliersModal = ref(false);
@@ -3098,6 +3237,16 @@ const rpmOverridesGroup = ref<AdminGroup | null>(null);
 const sortableGroups = ref<AdminGroup[]>([]);
 const createMessagesDispatchDefaults = createDefaultMessagesDispatchFormState();
 const editMessagesDispatchDefaults = createDefaultMessagesDispatchFormState();
+
+const userBillingSettingsForm = reactive({
+  enabled: true,
+  multiplier: 1,
+});
+
+const normalizedUserBillingMultiplier = computed(() => {
+  const parsed = Number(userBillingSettingsForm.multiplier);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 1;
+});
 
 const createForm = reactive({
   name: "",
@@ -4017,6 +4166,60 @@ const openSortModal = async () => {
 const closeSortModal = () => {
   showSortModal.value = false;
   sortableGroups.value = [];
+};
+
+const loadUserBillingSettings = async () => {
+  userBillingSettingsLoading.value = true;
+  try {
+    const settings = await adminAPI.settings.getUserBillingMultiplierSettings();
+    userBillingSettingsForm.enabled = settings.enabled;
+    userBillingSettingsForm.multiplier = settings.multiplier;
+  } catch (error: any) {
+    appStore.showError(
+      error.response?.data?.detail ||
+        t("admin.groups.userBillingSettings.loadFailed"),
+    );
+    console.error("Error loading user billing multiplier settings:", error);
+  } finally {
+    userBillingSettingsLoading.value = false;
+  }
+};
+
+const openUserBillingSettingsModal = async () => {
+  showUserBillingSettingsModal.value = true;
+  await loadUserBillingSettings();
+};
+
+const closeUserBillingSettingsModal = () => {
+  showUserBillingSettingsModal.value = false;
+};
+
+const saveUserBillingSettings = async () => {
+  const multiplier = Number(userBillingSettingsForm.multiplier);
+  if (!Number.isFinite(multiplier) || multiplier < 0) {
+    appStore.showError(t("admin.groups.userBillingSettings.invalidMultiplier"));
+    return;
+  }
+
+  userBillingSettingsSubmitting.value = true;
+  try {
+    const updated = await adminAPI.settings.updateUserBillingMultiplierSettings({
+      enabled: userBillingSettingsForm.enabled,
+      multiplier,
+    });
+    userBillingSettingsForm.enabled = updated.enabled;
+    userBillingSettingsForm.multiplier = updated.multiplier;
+    appStore.showSuccess(t("admin.groups.userBillingSettings.saveSuccess"));
+    closeUserBillingSettingsModal();
+  } catch (error: any) {
+    appStore.showError(
+      error.response?.data?.detail ||
+        t("admin.groups.userBillingSettings.saveFailed"),
+    );
+    console.error("Error saving user billing multiplier settings:", error);
+  } finally {
+    userBillingSettingsSubmitting.value = false;
+  }
 };
 
 // 保存排序

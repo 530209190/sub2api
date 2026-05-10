@@ -286,6 +286,46 @@ func TestOpenAIGatewayServiceRecordUsage_UsesUserSpecificGroupRate(t *testing.T)
 	require.Equal(t, 1, userRepo.deductCalls)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_AppliesGlobalUserBillingMultiplier(t *testing.T) {
+	groupID := int64(21)
+	groupRate := 1.5
+	usage := OpenAIUsage{InputTokens: 20, OutputTokens: 5}
+
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+	userBillingMultiplier := 0.8
+	svc.cfg.Default.UserBillingMultiplier = &userBillingMultiplier
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_global_user_billing_multiplier",
+			Usage:     usage,
+			Model:     "gpt-5.1",
+			Duration:  time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      1003,
+			GroupID: i64p(groupID),
+			Group: &Group{
+				ID:             groupID,
+				RateMultiplier: groupRate,
+			},
+		},
+		User:    &User{ID: 2003},
+		Account: &Account{ID: 3003},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.InDelta(t, 1.2, usageRepo.lastLog.RateMultiplier, 1e-12)
+
+	expected := expectedOpenAICost(t, svc, "gpt-5.1", usage, 1.2)
+	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_IncludesEndpointMetadata(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}

@@ -115,6 +115,42 @@ func TestGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
 	require.NoError(t, quotaSvc.lastQuotaCtxErr)
 }
 
+func TestGatewayServiceRecordUsage_AppliesGlobalUserBillingMultiplier(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, subRepo)
+	userBillingMultiplier := 0.8
+	svc.cfg.Default.UserBillingMultiplier = &userBillingMultiplier
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_global_user_billing_multiplier",
+			Usage: ClaudeUsage{
+				InputTokens:  10,
+				OutputTokens: 6,
+			},
+			Model:    "claude-sonnet-4",
+			Duration: time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      501,
+			GroupID: i64p(11),
+			Group: &Group{
+				ID:             11,
+				RateMultiplier: 1.5,
+			},
+		},
+		User:    &User{ID: 601},
+		Account: &Account{ID: 701},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.InDelta(t, 1.2, usageRepo.lastLog.RateMultiplier, 1e-12)
+	require.InDelta(t, usageRepo.lastLog.ActualCost, userRepo.lastAmount, 1e-12)
+}
+
 func TestGatewayServiceRecordUsage_BillingFingerprintIncludesRequestPayloadHash(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}

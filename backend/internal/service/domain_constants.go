@@ -308,6 +308,10 @@ const (
 	// sidebar entry is hidden. Defaults to false (opt-in feature).
 	SettingKeyAvailableChannelsEnabled = "available_channels_enabled"
 
+	// SettingKeyUserBillingMultiplierSettings stores JSON config for the global user
+	// billing multiplier applied after group/user-specific multipliers.
+	SettingKeyUserBillingMultiplierSettings = "user_billing_multiplier_settings"
+
 	// =========================
 	// Overload Cooldown (529)
 	// =========================

@@ -841,6 +841,30 @@ export async function deleteAdminApiKey(): Promise<{ message: string }> {
   return data;
 }
 
+// ==================== User Billing Multiplier Settings ====================
+
+export interface UserBillingMultiplierSettings {
+  enabled: boolean;
+  multiplier: number;
+}
+
+export async function getUserBillingMultiplierSettings(): Promise<UserBillingMultiplierSettings> {
+  const { data } = await apiClient.get<UserBillingMultiplierSettings>(
+    "/admin/settings/user-billing-multiplier",
+  );
+  return data;
+}
+
+export async function updateUserBillingMultiplierSettings(
+  settings: UserBillingMultiplierSettings,
+): Promise<UserBillingMultiplierSettings> {
+  const { data } = await apiClient.put<UserBillingMultiplierSettings>(
+    "/admin/settings/user-billing-multiplier",
+    settings,
+  );
+  return data;
+}
+
 // ==================== Overload Cooldown Settings ====================
 
 /**
@@ -1109,6 +1133,8 @@ export const settingsAPI = {
   getAdminApiKey,
   regenerateAdminApiKey,
   deleteAdminApiKey,
+  getUserBillingMultiplierSettings,
+  updateUserBillingMultiplierSettings,
   getOverloadCooldownSettings,
   updateOverloadCooldownSettings,
   getRateLimit429CooldownSettings,

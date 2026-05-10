@@ -1988,6 +1988,20 @@ export default {
       sortOrderHint: '拖拽分组调整显示顺序，排在前面的分组会优先显示',
       sortOrderUpdated: '排序已更新',
       failedToUpdateSortOrder: '更新排序失败',
+      userBillingSettings: {
+        button: '全局计费',
+        title: '全局计费倍率',
+        enabled: '启用全局计费倍率',
+        enabledHint: '开启后，所有用户最终计费都会在分组/用户专属倍率基础上再乘以该倍率。',
+        multiplier: '倍率',
+        multiplierHint: '0 表示本层倍率计费为 0；1 表示不额外调整；2 表示整体翻倍。',
+        effectivePreview: '当前额外倍率',
+        disabledPreview: '已关闭，全局倍率不参与计费。',
+        invalidMultiplier: '倍率必须大于或等于 0',
+        loadFailed: '加载全局计费倍率失败',
+        saveSuccess: '全局计费倍率已保存',
+        saveFailed: '保存全局计费倍率失败'
+      },
       deleteConfirm: "确定要删除分组 '{name}' 吗？所有关联的 API 密钥将不再属于任何分组。",
       deleteConfirmSubscription:
         "确定要删除订阅分组 '{name}' 吗？此操作会让所有绑定此订阅的用户的 API Key 失效，并删除所有相关的订阅记录。此操作无法撤销。",
