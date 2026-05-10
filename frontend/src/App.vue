@@ -5,15 +5,41 @@ import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import { resolveDocumentTitle } from '@/router/title'
 import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
-import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore } from '@/stores'
+import {
+  useAdminSettingsStore,
+  useAppStore,
+  useAuthStore,
+  useSubscriptionStore,
+  useAnnouncementStore
+} from '@/stores'
 import { getSetupStatus } from '@/api/setup'
 
 const router = useRouter()
 const route = useRoute()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const adminSettingsStore = useAdminSettingsStore()
 const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
+
+function resolveCurrentDocumentTitle() {
+  if (route.name === 'CustomPage') {
+    const id = route.params.id as string
+    const publicItems = appStore.cachedPublicSettings?.custom_menu_items ?? []
+    const menuItem = publicItems.find((item) => item.id === id)
+      ?? (authStore.isAdmin ? adminSettingsStore.customMenuItems.find((item) => item.id === id) : undefined)
+
+    if (menuItem?.label) {
+      return `${menuItem.label} - ${appStore.siteName || 'Sub2API'}`
+    }
+  }
+
+  return resolveDocumentTitle(route.meta.title, appStore.siteName, route.meta.titleKey as string)
+}
+
+function syncDocumentTitle() {
+  document.title = resolveCurrentDocumentTitle()
+}
 
 /**
  * Update favicon dynamically
@@ -40,6 +66,20 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  [
+    () => route.fullPath,
+    () => route.meta.title,
+    () => route.meta.titleKey,
+    () => appStore.siteName,
+    () => appStore.cachedPublicSettings?.custom_menu_items,
+    () => adminSettingsStore.customMenuItems,
+    () => authStore.isAdmin
+  ],
+  syncDocumentTitle,
+  { deep: true, immediate: true }
 )
 
 // Watch for authentication state and manage subscription data + announcements
@@ -107,7 +147,7 @@ onMounted(async () => {
   await appStore.fetchPublicSettings()
 
   // Re-resolve document title now that siteName is available
-  document.title = resolveDocumentTitle(route.meta.title, appStore.siteName, route.meta.titleKey as string)
+  syncDocumentTitle()
 })
 </script>
 
