@@ -12,3 +12,13 @@ func TestShouldEnqueueSchedulerOutboxForExtraUpdates_CompactCapabilityKeysAreRel
 		t.Fatalf("expected compact capability updates to enqueue scheduler outbox")
 	}
 }
+
+func TestShouldEnqueueSchedulerOutboxForExtraUpdates_ImageCapabilityKeysAreRelevant(t *testing.T) {
+	updates := map[string]any{
+		"supports_image_input": false,
+	}
+
+	if !shouldEnqueueSchedulerOutboxForExtraUpdates(updates) {
+		t.Fatalf("expected image capability updates to enqueue scheduler outbox")
+	}
+}

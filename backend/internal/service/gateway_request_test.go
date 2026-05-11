@@ -41,6 +41,45 @@ func TestParseGatewayRequest_ThinkingAdaptiveEnabled(t *testing.T) {
 	require.True(t, parsed.ThinkingEnabled)
 }
 
+func TestParseGatewayRequest_HasImageInput(t *testing.T) {
+	body := []byte(`{
+		"model":"claude-opus-4-7",
+		"messages":[{
+			"role":"user",
+			"content":[
+				{"type":"text","text":"describe this"},
+				{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}}
+			]
+		}]
+	}`)
+	parsed, err := ParseGatewayRequest(body, "")
+	require.NoError(t, err)
+	require.True(t, parsed.HasImageInput)
+}
+
+func TestParseGatewayRequest_HasImageInputFalseForTextOnly(t *testing.T) {
+	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`)
+	parsed, err := ParseGatewayRequest(body, "")
+	require.NoError(t, err)
+	require.False(t, parsed.HasImageInput)
+}
+
+func TestParseGatewayRequest_HasImageInputFromResponsesInput(t *testing.T) {
+	body := []byte(`{
+		"model":"claude-opus-4-7",
+		"input":[{
+			"role":"user",
+			"content":[
+				{"type":"input_text","text":"describe this"},
+				{"type":"input_image","image_url":"data:image/png;base64,aGVsbG8="}
+			]
+		}]
+	}`)
+	parsed, err := ParseGatewayRequest(body, "responses")
+	require.NoError(t, err)
+	require.True(t, parsed.HasImageInput)
+}
+
 func TestParseGatewayRequest_MaxTokens(t *testing.T) {
 	body := []byte(`{"model":"claude-haiku-4-5","max_tokens":1}`)
 	parsed, err := ParseGatewayRequest(body, "")
@@ -91,6 +130,20 @@ func TestParseGatewayRequest_GeminiContents(t *testing.T) {
 	require.Len(t, parsed.Messages, 3, "should parse contents as Messages")
 	require.False(t, parsed.HasSystem, "Gemini format should not set HasSystem")
 	require.Nil(t, parsed.System, "no systemInstruction means nil System")
+}
+
+func TestParseGatewayRequest_GeminiHasImageInput(t *testing.T) {
+	body := []byte(`{
+		"contents": [
+			{"role": "user", "parts": [
+				{"text": "Describe this"},
+				{"inlineData": {"mimeType": "image/png", "data": "aGVsbG8="}}
+			]}
+		]
+	}`)
+	parsed, err := ParseGatewayRequest(body, domain.PlatformGemini)
+	require.NoError(t, err)
+	require.True(t, parsed.HasImageInput)
 }
 
 func TestParseGatewayRequest_GeminiSystemInstruction(t *testing.T) {

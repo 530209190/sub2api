@@ -443,6 +443,94 @@ func TestGatewayService_SelectAccountForModelWithPlatform_NoAvailableAccounts(t 
 	require.ErrorIs(t, err, ErrNoAvailableAccounts)
 }
 
+func TestGatewayService_SelectAccountWithLoadAwareness_FiltersAnthropicAPIKeyWithImageInputDisabled(t *testing.T) {
+	textOnly := Account{
+		ID:          1,
+		Name:        "text-only",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Extra:       map[string]any{"supports_image_input": false},
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+	}
+	vision := Account{
+		ID:          2,
+		Name:        "vision",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Extra:       map[string]any{"supports_image_input": true},
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    50,
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{textOnly, vision},
+		accountsByID: map[int64]*Account{
+			textOnly.ID: &textOnly,
+			vision.ID:   &vision,
+		},
+	}
+	svc := &GatewayService{
+		accountRepo: repo,
+		cache:       &mockGatewayCacheForPlatform{},
+		cfg:         testConfig(),
+	}
+
+	ctx := WithRequiresImageInput(context.Background(), true)
+	selection, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-opus-4-7", nil, "", 0)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.Equal(t, int64(2), selection.Account.ID)
+}
+
+func TestGatewayService_SelectAccountWithLoadAwareness_IgnoresStickyAccountWithImageInputDisabled(t *testing.T) {
+	textOnly := Account{
+		ID:          1,
+		Name:        "text-only",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Extra:       map[string]any{"supports_image_input": false},
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+	}
+	vision := Account{
+		ID:          2,
+		Name:        "vision",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Extra:       map[string]any{"supports_image_input": true},
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    50,
+	}
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{textOnly, vision},
+		accountsByID: map[int64]*Account{
+			textOnly.ID: &textOnly,
+			vision.ID:   &vision,
+		},
+	}
+	cache := &mockGatewayCacheForPlatform{sessionBindings: map[string]int64{"sticky-image": textOnly.ID}}
+	svc := &GatewayService{
+		accountRepo: repo,
+		cache:       cache,
+		cfg:         testConfig(),
+	}
+
+	ctx := WithRequiresImageInput(context.Background(), true)
+	selection, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sticky-image", "claude-opus-4-7", nil, "", 0)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.Equal(t, int64(2), selection.Account.ID)
+	require.Equal(t, int64(2), cache.sessionBindings["sticky-image"])
+}
+
 // TestGatewayService_SelectAccountForModelWithPlatform_AllExcluded 测试所有账户被排除
 func TestGatewayService_SelectAccountForModelWithPlatform_AllExcluded(t *testing.T) {
 	ctx := context.Background()

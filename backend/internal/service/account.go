@@ -1058,6 +1058,29 @@ func (a *Account) SupportsOpenAIImageCapability(capability OpenAIImagesCapabilit
 	}
 }
 
+func (a *Account) SupportsImageInput() bool {
+	if a == nil {
+		return false
+	}
+	if supported, ok := a.getExtraBoolValue("supports_image_input"); ok {
+		return supported
+	}
+	if supported, ok := a.getExtraBoolValue("supports_images"); ok {
+		return supported
+	}
+	if capabilities, ok := a.Extra["capabilities"].(map[string]any); ok {
+		if supported, ok := parseOptionalBool(capabilities["image_input"]); ok {
+			return supported
+		}
+		if supported, ok := parseOptionalBool(capabilities["supports_image_input"]); ok {
+			return supported
+		}
+	}
+	// Image input is enabled by default. Operators can explicitly disable it
+	// for text-only upstream routers with extra.supports_image_input=false.
+	return true
+}
+
 func (a *Account) GetChatGPTUserID() string {
 	if !a.IsOpenAIOAuth() {
 		return ""
@@ -1583,15 +1606,57 @@ func (a *Account) getExtraTime(key string) time.Time {
 
 // getExtraBool 从 Extra 中读取指定 key 的 bool 值
 func (a *Account) getExtraBool(key string) bool {
+	v, _ := a.getExtraBoolValue(key)
+	return v
+}
+
+func (a *Account) getExtraBoolValue(key string) (bool, bool) {
 	if a.Extra == nil {
-		return false
+		return false, false
 	}
 	if v, ok := a.Extra[key]; ok {
-		if b, ok := v.(bool); ok {
-			return b
+		return parseOptionalBool(v)
+	}
+	return false, false
+}
+
+func parseOptionalBool(value any) (bool, bool) {
+	switch v := value.(type) {
+	case bool:
+		return v, true
+	case string:
+		s := strings.ToLower(strings.TrimSpace(v))
+		switch s {
+		case "true", "1", "yes", "on":
+			return true, true
+		case "false", "0", "no", "off":
+			return false, true
+		}
+	case float64:
+		if v == 1 {
+			return true, true
+		}
+		if v == 0 {
+			return false, true
+		}
+	case int:
+		if v == 1 {
+			return true, true
+		}
+		if v == 0 {
+			return false, true
+		}
+	case json.Number:
+		if i, err := v.Int64(); err == nil {
+			if i == 1 {
+				return true, true
+			}
+			if i == 0 {
+				return false, true
+			}
 		}
 	}
-	return false
+	return false, false
 }
 
 // getExtraString 从 Extra 中读取指定 key 的字符串值

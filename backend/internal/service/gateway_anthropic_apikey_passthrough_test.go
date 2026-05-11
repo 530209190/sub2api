@@ -944,6 +944,60 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_ForwardDirect_UpstreamRequest
 	require.True(t, ok)
 }
 
+func TestGatewayService_AnthropicAPIKey_ImageUnsupported404TriggersFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{"error":{"code":"404","message":"No endpoints found that support image input","param":"","type":""}}`)
+
+	tests := []struct {
+		name        string
+		passthrough bool
+	}{
+		{name: "normal forward", passthrough: false},
+		{name: "passthrough forward", passthrough: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+			upstream := &anthropicHTTPUpstreamRecorder{
+				resp: &http.Response{
+					StatusCode: http.StatusNotFound,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(bytes.NewReader(body)),
+				},
+			}
+			svc := &GatewayService{
+				cfg: &config.Config{
+					Gateway:  config.GatewayConfig{MaxLineSize: defaultMaxLineSize},
+					Security: config.SecurityConfig{URLAllowlist: config.URLAllowlistConfig{Enabled: false}},
+				},
+				httpUpstream: upstream,
+			}
+			account := newAnthropicAPIKeyAccountForTest()
+			if !tt.passthrough {
+				account.Extra = map[string]any{}
+			}
+			parsed := &ParsedRequest{
+				Body:          []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AA=="}}]}]}`),
+				Model:         "claude-opus-4-7",
+				Stream:        false,
+				HasImageInput: true,
+			}
+
+			ctx := WithRequiresImageInput(context.Background(), true)
+			result, err := svc.Forward(ctx, c, account, parsed)
+			require.Nil(t, result)
+			var failoverErr *UpstreamFailoverError
+			require.ErrorAs(t, err, &failoverErr)
+			require.Equal(t, http.StatusNotFound, failoverErr.StatusCode)
+			require.Contains(t, string(failoverErr.ResponseBody), "No endpoints found that support image input")
+		})
+	}
+}
+
 func TestGatewayService_AnthropicAPIKeyPassthrough_ForwardDirect_EmptyResponseBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

@@ -155,17 +155,21 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 
-		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+		if s.shouldFailoverUpstreamError(resp.StatusCode) || isImageInputUnsupportedUpstreamError(ctx, resp.StatusCode, respBody) {
+			kind := "failover"
+			if isImageInputUnsupportedUpstreamError(ctx, resp.StatusCode, respBody) {
+				kind = "image_input_capability_failover"
+			}
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 				Platform:           account.Platform,
 				AccountID:          account.ID,
 				AccountName:        account.Name,
 				UpstreamStatusCode: resp.StatusCode,
 				UpstreamRequestID:  resp.Header.Get("x-request-id"),
-				Kind:               "failover",
+				Kind:               kind,
 				Message:            upstreamMsg,
 			})
-			if s.rateLimitService != nil {
+			if s.rateLimitService != nil && kind == "failover" {
 				s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
 			}
 			return nil, &UpstreamFailoverError{

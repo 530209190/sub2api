@@ -160,6 +160,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	reqModel := parsedReq.Model
 	reqStream := parsedReq.Stream
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
+	if parsedReq.HasImageInput {
+		c.Request = c.Request.WithContext(service.WithRequiresImageInput(c.Request.Context(), true))
+		reqLog = reqLog.With(zap.Bool("requires_image_input", true))
+	}
 
 	// 解析渠道级模型映射
 	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
@@ -1506,6 +1510,10 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	reqLog = reqLog.With(zap.String("model", parsedReq.Model), zap.Bool("stream", parsedReq.Stream))
 	// 在请求上下文中记录 thinking 状态，供 Antigravity 最终模型 key 推导/模型维度限流使用
 	c.Request = c.Request.WithContext(service.WithThinkingEnabled(c.Request.Context(), parsedReq.ThinkingEnabled, h.metadataBridgeEnabled()))
+	if parsedReq.HasImageInput {
+		c.Request = c.Request.WithContext(service.WithRequiresImageInput(c.Request.Context(), true))
+		reqLog = reqLog.With(zap.Bool("requires_image_input", true))
+	}
 
 	// 验证 model 必填
 	if parsedReq.Model == "" {

@@ -155,6 +155,10 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	if parsedReq == nil {
 		parsedReq = &service.ParsedRequest{Model: reqModel, Stream: reqStream, Body: body}
 	}
+	if parsedReq.HasImageInput {
+		c.Request = c.Request.WithContext(service.WithRequiresImageInput(c.Request.Context(), true))
+		reqLog = reqLog.With(zap.Bool("requires_image_input", true))
+	}
 	parsedReq.SessionContext = &service.SessionContext{
 		ClientIP:  ip.GetClientIP(c),
 		UserAgent: c.GetHeader("User-Agent"),

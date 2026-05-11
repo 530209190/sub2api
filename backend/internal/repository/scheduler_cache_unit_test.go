@@ -19,6 +19,9 @@ func TestBuildSchedulerMetadataAccount_KeepsOpenAIWSFlags(t *testing.T) {
 			"openai_oauth_responses_websockets_v2_mode":    service.OpenAIWSIngressModePassthrough,
 			"openai_ws_force_http":                         true,
 			"mixed_scheduling":                             true,
+			"supports_image_input":                         false,
+			"supports_images":                              true,
+			"capabilities":                                 map[string]any{"image_input": false},
 			"unused_large_field":                           "drop-me",
 		},
 	}
@@ -29,6 +32,9 @@ func TestBuildSchedulerMetadataAccount_KeepsOpenAIWSFlags(t *testing.T) {
 	require.Equal(t, service.OpenAIWSIngressModePassthrough, got.Extra["openai_oauth_responses_websockets_v2_mode"])
 	require.Equal(t, true, got.Extra["openai_ws_force_http"])
 	require.Equal(t, true, got.Extra["mixed_scheduling"])
+	require.Equal(t, false, got.Extra["supports_image_input"])
+	require.Equal(t, true, got.Extra["supports_images"])
+	require.Equal(t, map[string]any{"image_input": false}, got.Extra["capabilities"])
 	require.Nil(t, got.Extra["unused_large_field"])
 }
 

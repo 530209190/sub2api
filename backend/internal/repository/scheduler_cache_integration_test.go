@@ -48,6 +48,9 @@ func TestSchedulerCacheSnapshotUsesSlimMetadataButKeepsFullAccount(t *testing.T)
 			"window_cost_sticky_reserve":   8.0,
 			"max_sessions":                 4,
 			"session_idle_timeout_minutes": 11,
+			"supports_image_input":         false,
+			"supports_images":              true,
+			"capabilities":                 map[string]any{"image_input": false},
 			"unused_large_field":           strings.Repeat("y", 4096),
 		},
 		RateLimitResetAt:       &limitReset,
@@ -87,6 +90,9 @@ func TestSchedulerCacheSnapshotUsesSlimMetadataButKeepsFullAccount(t *testing.T)
 	require.Equal(t, 8.0, got.GetWindowCostStickyReserve())
 	require.Equal(t, 4, got.GetMaxSessions())
 	require.Equal(t, 11, got.GetSessionIdleTimeoutMinutes())
+	require.Equal(t, false, got.Extra["supports_image_input"])
+	require.Equal(t, true, got.Extra["supports_images"])
+	require.Equal(t, map[string]any{"image_input": false}, got.Extra["capabilities"])
 	require.Nil(t, got.Extra["unused_large_field"])
 	require.Equal(t, []int64{bucket.GroupID}, got.GroupIDs)
 	require.Len(t, got.AccountGroups, 1)

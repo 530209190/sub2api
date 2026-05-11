@@ -73,6 +73,7 @@ type ParsedRequest struct {
 	ThinkingEnabled bool            // 是否开启 thinking（部分平台会影响最终模型名）
 	OutputEffort    string          // output_config.effort（Claude API 的推理强度控制）
 	MaxTokens       int             // max_tokens 值（用于探测请求拦截）
+	HasImageInput   bool            // 请求体是否包含图片输入 content block
 	SessionContext  *SessionContext // 可选：请求上下文区分因子（nil 时行为不变）
 
 	// GroupID 请求所属分组 ID（来自 API Key）
@@ -208,6 +209,7 @@ func ParseGatewayRequest(body []byte, protocol string) (*ParsedRequest, error) {
 				return nil, err
 			}
 			parsed.Messages = msgs
+			parsed.HasImageInput = containsImageInput(msgs)
 		}
 	default:
 		// Anthropic / OpenAI 格式: system / messages
@@ -236,10 +238,73 @@ func ParseGatewayRequest(body []byte, protocol string) (*ParsedRequest, error) {
 				return nil, err
 			}
 			parsed.Messages = messages
+			parsed.HasImageInput = containsImageInput(messages)
+		}
+
+		if !parsed.HasImageInput {
+			if input := gjson.Get(jsonStr, "input"); input.Exists() {
+				var inputValue any
+				if err := json.Unmarshal(sliceRawFromBody(body, input), &inputValue); err != nil {
+					return nil, err
+				}
+				parsed.HasImageInput = containsImageInput(inputValue)
+			}
 		}
 	}
 
 	return parsed, nil
+}
+
+func containsImageInput(value any) bool {
+	switch v := value.(type) {
+	case []any:
+		for _, item := range v {
+			if containsImageInput(item) {
+				return true
+			}
+		}
+	case map[string]any:
+		if isImageInputBlock(v) {
+			return true
+		}
+		for _, item := range v {
+			if containsImageInput(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isImageInputBlock(block map[string]any) bool {
+	blockType, _ := block["type"].(string)
+	switch strings.TrimSpace(blockType) {
+	case "image", "input_image", "image_url":
+		return true
+	}
+	if _, ok := block["image_url"]; ok {
+		return true
+	}
+	if hasInlineImageData(block, "inlineData", "mimeType") || hasInlineImageData(block, "inline_data", "mime_type") {
+		return true
+	}
+	source, ok := block["source"].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, hasData := source["data"]
+	mediaType, _ := source["media_type"].(string)
+	return hasData && strings.HasPrefix(strings.ToLower(strings.TrimSpace(mediaType)), "image/")
+}
+
+func hasInlineImageData(block map[string]any, fieldName string, mediaTypeField string) bool {
+	inlineData, ok := block[fieldName].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, hasData := inlineData["data"]
+	mediaType, _ := inlineData[mediaTypeField].(string)
+	return hasData && strings.HasPrefix(strings.ToLower(strings.TrimSpace(mediaType)), "image/")
 }
 
 // sliceRawFromBody 返回 Result.Raw 对应的原始字节切片。
